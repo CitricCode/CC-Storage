@@ -1,6 +1,8 @@
---- =============== item_core ================= ---
+-- ================ item_core ================== --
+-- This module is an interface for the items and
+-- mods databases
 
-local misc = require "/storage/misc"
+local db_misc = require "/storage/db_misc"
 
 local database = {}
 
@@ -23,10 +25,7 @@ end
 --- @param mod_name string: Name of the mod to look
 --- @return boolean: Whether the mod was found
 local function mod_exist(mod_name)
-   local database_file = fs.open(mods_path, "r")
-   local mods = database_file.readAll()
-   database_file.close()
-
+   local mods = db_misc.read_database(mods_path)
    if mods:find(mod_name, 1, true) then
       return true
    end
@@ -37,10 +36,7 @@ end
 --- @param mod_id number: uint8 id of the mod
 --- @return string|nil: Name of the mod or nil
 local function get_mod_name(mod_id)
-   local database_file = fs.open(mods_path, "r")
-   local mods = database_file.readAll()
-   database_file.close()
-
+   local mods = db_misc.read_database(mods_path)
    local srt, fin, index = 0, 0, 0
    while index ~= mod_id do
       srt = fin
@@ -49,7 +45,6 @@ local function get_mod_name(mod_id)
       index = index + 1
    end
    local mod_name = mods:sub(srt + 1, fin - 1)
-   
    return mod_name
 end
 
@@ -57,10 +52,7 @@ end
 --- @param mod_name string: Name of the mod to look
 --- @return number|nil: The found mod id or nil
 local function get_mod_id(mod_name)
-   local database_file = fs.open(mods_path, "r")
-   local mods = database_file.readAll()
-   database_file.close()
-
+   local mods = db_misc.read_database(mods_path)
    local srt, _ = mods:find(mod_name, 1, true)
    if not srt then return nil end
    mods = mods:sub(1, srt - 1)
@@ -79,10 +71,10 @@ local function serialise_item(item_data)
       append_mod(item_data.mod)
    end
    local mod_id = get_mod_id(item_data.mod)
-   mod_id = misc.num_to_uint8(mod_id)
+   mod_id = db_misc.num_to_uint8(mod_id)
    local item_name = item_data.name.."\x00"
    local item_num = item_data.count
-   local item_num = misc.num_to_uint24(item_num)
+   local item_num = db_misc.num_to_uint24(item_num)
    local serialised_data = mod_id..item_name
    serialised_data = serialised_data..item_num
    return serialised_data
@@ -97,7 +89,7 @@ local function deserialise_item(raw_data)
    local mod_name = get_mod_name(mod_id)
    local item_name = raw_data:sub(2, len - 4)
    local item_count = raw_data:sub(len - 2, len)
-   item_count = misc.uint24_to_num(item_count)
+   item_count = db_misc.uint24_to_num(item_count)
    local item_data = {
       ["mod"] = mod_name,
       ["name"] = item_name,
@@ -116,7 +108,7 @@ function database.append_item(item_data)
       return "Item already exists"
    end
    local serialised_data=serialise_item(item_data)
-   local database_file = fs.open(items_path, "a")
+   local database_file = fs.open(items_path, "ab")
    database_file.write(serialised_data)
    database_file.close()
 end
@@ -128,11 +120,9 @@ end
 --- @return nil|string: return string if failed
 function database.update_item(item_id, item_count)
    local err
-   item_count, err = misc.num_to_uint24(item_count)
+   item_count,err=db_misc.num_to_uint24(item_count)
    if err then return err end
-   local database_file = fs.open(items_path, "rb")
-   local items = database_file.readAll()
-   database_file.close()
+   local items = db_misc.read_database(items_path)
 
    local fin, index = 0, 0
    while index ~= item_id do
@@ -145,10 +135,7 @@ function database.update_item(item_id, item_count)
    local start_slice = items:sub(1, fin)
    local end_slice = items:sub(fin + 4)
    items = start_slice..item_count..end_slice
-
-   database_file = fs.open(items_path, "wb")
-   database_file.write(items)
-   database_file.close()
+   db_misc.write_database(items_path, items)
 end
 
 --- Ditermines whether item exists in database
@@ -156,21 +143,13 @@ end
 --- @param item_name string: Name of the item
 --- @return boolean: If found in database or not
 function database.item_exist(mod_name, item_name)
-   if not mod_exist(mod_name) then
-      return false
-   end
-
-   local database_file = fs.open(items_path, "rb")
-   local items = database_file.readAll()
-   database_file.close()
-
+   if not mod_exist(mod_name) then return false end
+   local items = db_misc.read_database(items_path)
    local mod_id = get_mod_id(mod_name)
-   mod_id = misc.num_to_uint8(mod_id)
+   mod_id = db_misc.num_to_uint8(mod_id)
    local search = mod_id..item_name.."\x00"
    local _, result = items:find(search, 1, true)
-   if result then
-      return true
-   end
+   if result then return true end
    return false
 end
 
@@ -182,12 +161,9 @@ function database.find_item_id(mod_name, item_name)
    local exists
    exists=database.item_exist(mod_name, item_name)
    if not exists then return nil end
-   local database_file = fs.open(items_path, "rb")
-   local items = database_file.readAll()
-   database_file.close()
-
+   local items = db_misc.read_database(items_path)
    local mod_id = get_mod_id(mod_name)
-   local mod_id = misc.num_to_uint8(mod_id)
+   local mod_id = db_misc.num_to_uint8(mod_id)
    local target = mod_id..item_name.."\x00"
    local cur_name = ""
    local srt, fin, index = 0, -4, 0
@@ -205,10 +181,7 @@ end
 --- @param item_id number: Id of the item to get
 --- @return table|nil: Dictionary storing item data
 function database.get_item_data(item_id)
-   local database_file = fs.open(items_path, "rb")
-   local items = database_file.readAll()
-   database_file.close()
-
+   local items = db_misc.read_database(items_path)
    local srt, fin, index = 0, -4, 0
    while item_id ~= index do
       srt = fin + 4
