@@ -1,6 +1,4 @@
 /.vscode/
-/.emulator/
-/converter/
+/src/storage/databases/
 /todo.txt
 /commands.txt
-/src/storage/databases/

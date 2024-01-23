@@ -3,7 +3,7 @@
 -- mods databases
 
 local db_misc = require "/storage/db_misc"
-local mods_core = require "mods_core"
+local mods_core = require "/storage/mods_core"
 
 local database = {}
 

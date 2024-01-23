@@ -16,9 +16,10 @@
     - ID starts from 1
     - Name is assumed to only contain alphabetical
       characters
+    - The database has a null byte at the start
 ]]--
 
-local db_misc = require "db_misc"
+local db_misc = require "/storage/db_misc"
 
 local mods_core = {}
 
@@ -28,15 +29,13 @@ local mods_path = db_misc.db_path.."mods.db"
 --- @param mods string: String containing mods.db
 --- @return number: Available id to use
 local function next_free_id(mods)
-   local srt, cur_id, index = -1, 1, 1
-   while index - 1 == cur_id do
-      cur_id = mods:sub(srt + 1, srt + 2)
-      cur_id = db_misc.uint16_to_num(cur_id)
-      srt = mods:find("\x00", srt + 1)
+   local srt, search, index = 0, " ", 0
+   while srt and search do
       index = index + 1
+      search = "\x00"..db_misc.num_to_uint16(index)
+      srt, _ = mods:find(search, 1, false)
    end
-   local mod_id = index + 1
-   return mod_id
+   return index
 end
 
 --- Adds mod to the database, assumes mod not exist
@@ -54,6 +53,9 @@ function mods_core.add_mod(mod_name)
    db_misc.write_database(mods_path, mods)
 end
 
+--- @todo create functionality for deleting mod
+---       make sure it denies deletion if items
+---       are in the database that still use it
 function mods_core.del_mod()
 
 end
@@ -75,7 +77,7 @@ function mods_core.get_name(mod_id)
    local mods = db_misc.read_database(mods_path)
    mod_id = db_misc.num_to_uint16(mod_id)
    local search = "\x00"..mod_id
-   local _, srt = mods:find(search)
+   local _, srt = mods:find(search, 1, true)
    local fin, _ = mods:find("\x00", srt)
    if not (srt or fin) then return nil end
    local mod_name = mods:sub(srt + 1, fin - 1)

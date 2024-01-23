@@ -234,7 +234,7 @@ local function chest_search(contents, filters)
       if filters["filter_name"] and item_data["name"] ~= filters["filter_name"] then
          is_result = false
       end
-      if filters["mod"] and item_data["mod"] ~= filters["filter_mod"] then
+      if filters["filter_mod"] and item_data["mod"] ~= filters["filter_mod"] then
          is_result = false
       end
       if filters["item_id"] and item_id ~= filters["item_id"] then
@@ -399,6 +399,7 @@ local function display_storage()
    end
 end
 
+--- @todo not entering a number causes error
 local function main()
    import_dbs()
    if args[1] == "-r" then
