@@ -4,6 +4,8 @@
 
 local db_misc = {}
 
+db_misc.db_path = "/storage/databases/"
+
 --- Converts lua number to 3 byte string
 --- @param int number: Number to convert
 --- @return string|nil, nil|string: if failed

@@ -3,12 +3,11 @@
 -- mods databases
 
 local db_misc = require "/storage/db_misc"
+local mods_core = require "mods_core"
 
 local database = {}
 
-local databases_path = "/storage/databases/"
-local items_path = databases_path.."items.db"
-local mods_path = databases_path.."mods.db"
+local items_path = db_misc.db_path.."items.db"
 
 --                 Mods database                 --
 --              name: string|"\x00"              --
@@ -16,48 +15,28 @@ local mods_path = databases_path.."mods.db"
 --- Adds mod to the database, assumes mod not exist
 --- @param mod_name string: Name of the mod to add
 local function append_mod(mod_name)
-   local database_file = fs.open(mods_path, "ab")
-   database_file.write(mod_name.."\x00")
-   database_file.close()
+   _ = mods_core.add_mod(mod_name)
 end
 
 --- Determines if mod exists in database or not
 --- @param mod_name string: Name of the mod to look
 --- @return boolean: Whether the mod was found
 local function mod_exist(mod_name)
-   local mods = db_misc.read_database(mods_path)
-   if mods:find(mod_name, 1, true) then
-      return true
-   end
-   return false
+   return mods_core.mod_exists(mod_name)
 end
 
 --- Finds the mod name from its id
 --- @param mod_id number: uint8 id of the mod
 --- @return string|nil: Name of the mod or nil
 local function get_mod_name(mod_id)
-   local mods = db_misc.read_database(mods_path)
-   local srt, fin, index = 0, 0, 0
-   while index ~= mod_id do
-      srt = fin
-      _, fin = mods:find("\x00", fin + 1)
-      if not fin then return nil end
-      index = index + 1
-   end
-   local mod_name = mods:sub(srt + 1, fin - 1)
-   return mod_name
+   return mods_core.get_name(mod_id)
 end
 
 --- Finds mod id from its name, assumes mod exists
 --- @param mod_name string: Name of the mod to look
 --- @return number|nil: The found mod id or nil
 local function get_mod_id(mod_name)
-   local mods = db_misc.read_database(mods_path)
-   local srt, _ = mods:find(mod_name, 1, true)
-   if not srt then return nil end
-   mods = mods:sub(1, srt - 1)
-   local _, mod_id = mods:gsub("\x00", "")
-   return mod_id + 1
+   return mods_core.get_id(mod_name)
 end
 
 --                 Item database                 --
