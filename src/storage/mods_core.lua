@@ -53,11 +53,21 @@ function mods_core.add_mod(mod_name)
    db_misc.write_database(mods_path, mods)
 end
 
---- @todo create functionality for deleting mod
----       make sure it denies deletion if items
----       are in the database that still use it
-function mods_core.del_mod()
-
+--- @todo create functionality for denying deletion
+---       if items are in the database that still
+---       use it
+--- Removes a mod from the database
+--- @param mod_id number: uint16 id of the mod
+--- @return nil|string: return if error
+function mods_core.del_mod(mod_id)
+   local mods = db_misc.read_database(mods_path)
+   mod_id = db_misc.num_to_uint16(mod_id)
+   local search = "\x00"..mod_id
+   local srt, _ = mods:find(search, 1, true)
+   if not srt then return "Mod not found" end
+   local fin, _ = mods:find("\x00", srt + 3)
+   mods = mods:sub(1, srt)..mods:sub(fin + 1)
+   db_misc.write_database(mods_path, mods)
 end
 
 --- Determines if mod exists in database or not
