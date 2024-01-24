@@ -1,7 +1,7 @@
 -- ================ mods_core ================== --
 --[[
-   This module is an interface for the a custom
-   binary database used to store mod names.
+   This module is an interface for a custom binary
+   database used to store mod names.
    
    Format:
    Byte 1-2:   mod_id   (uint16)
