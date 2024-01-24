@@ -90,35 +90,6 @@ local function import_dbs()
    chest_db = open_db(chest_db_path)
 end
 
---                   Item database                   --
--- [itemID] = {"name", "mod", "count", "categories"} --
-
---- Adds item to database
---- @param item_data table: table containing item data
---- @return nil|string error: if item already exists
-local function add_item(item_data)
-   local err = item_core.append_item(item_data)
-   return err
-end
-
---- Overwrites data of a given item with non nil values
---- @param item_id integer: id of the item
---- @param item_data table: table containing data
---- @return nil|string error: if item doesn't exist
-local function upd_item(item_id, item_data)
-   local item_count = item_data.count
-   local err = item_core.update_item(item_id, item_count)
-   return err
-end
-
---- Finds the id of the item given it's name
---- @param item_name string: name of the item
---- @return nil|integer item_id: if item found
-local function find_item_id(mod_name, item_name)
-   local id = item_core.find_item_id(mod_name, item_name)
-   return id
-end
-
 
 --                  Chests database                  --
 --    ["chestName"] = {[slot] = {itemID, counts}}    --
@@ -234,7 +205,7 @@ local function chest_search(contents, filters)
       if filters["filter_name"] and item_data["name"] ~= filters["filter_name"] then
          is_result = false
       end
-      if filters["mod"] and item_data["mod"] ~= filters["filter_mod"] then
+      if filters["filter_mod"] and item_data["mod"] ~= filters["filter_mod"] then
          is_result = false
       end
       if filters["item_id"] and item_id ~= filters["item_id"] then
@@ -399,6 +370,7 @@ local function display_storage()
    end
 end
 
+--- @todo not entering a number causes error
 local function main()
    import_dbs()
    if args[1] == "-r" then

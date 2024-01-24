@@ -2,6 +2,8 @@
 
 CC:Storage is a program for the CC:Restitched mod that creates and manages a storage system written in lua.
 
+This project is currently very unfinished.
+
 ## Installation
 
 Download the repository and extract `src` into the computer's directory

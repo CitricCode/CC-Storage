@@ -1,64 +1,29 @@
 -- ================ item_core ================== --
--- This module is an interface for the items and
--- mods databases
+--[[
+   This module is an interface for a custom binary
+   database used to store information about items
+   in the storage system
+   
+   Format:
+   Byte 1  :   mod_id (uint8)
+   Byte 2-n:   item_name (null terminated string)
+   Byte n+1-n+3:  count in database (uint24)
+   
+   Example:
+   01  73 74 6F 6E 65  00 01 24
+   id  [ item_name  ]  [count ]
+   
+   Notes:
+    - This database will be reworked shortly
+]]--
 
 local db_misc = require "/storage/db_misc"
+local mods_core = require "/storage/mods_core"
 
 local database = {}
 
-local databases_path = "/storage/databases/"
-local items_path = databases_path.."items.db"
-local mods_path = databases_path.."mods.db"
+local items_path = db_misc.db_path.."items.db"
 
---                 Mods database                 --
---              name: string|"\x00"              --
-
---- Adds mod to the database, assumes mod not exist
---- @param mod_name string: Name of the mod to add
-local function append_mod(mod_name)
-   local database_file = fs.open(mods_path, "ab")
-   database_file.write(mod_name.."\x00")
-   database_file.close()
-end
-
---- Determines if mod exists in database or not
---- @param mod_name string: Name of the mod to look
---- @return boolean: Whether the mod was found
-local function mod_exist(mod_name)
-   local mods = db_misc.read_database(mods_path)
-   if mods:find(mod_name, 1, true) then
-      return true
-   end
-   return false
-end
-
---- Finds the mod name from its id
---- @param mod_id number: uint8 id of the mod
---- @return string|nil: Name of the mod or nil
-local function get_mod_name(mod_id)
-   local mods = db_misc.read_database(mods_path)
-   local srt, fin, index = 0, 0, 0
-   while index ~= mod_id do
-      srt = fin
-      _, fin = mods:find("\x00", fin + 1)
-      if not fin then return nil end
-      index = index + 1
-   end
-   local mod_name = mods:sub(srt + 1, fin - 1)
-   return mod_name
-end
-
---- Finds mod id from its name, assumes mod exists
---- @param mod_name string: Name of the mod to look
---- @return number|nil: The found mod id or nil
-local function get_mod_id(mod_name)
-   local mods = db_misc.read_database(mods_path)
-   local srt, _ = mods:find(mod_name, 1, true)
-   if not srt then return nil end
-   mods = mods:sub(1, srt - 1)
-   local _, mod_id = mods:gsub("\x00", "")
-   return mod_id + 1
-end
 
 --                 Item database                 --
 --mod_id: uint8|name: string|"\x00"|count: uint24--
@@ -67,10 +32,10 @@ end
 --- @param item_data table: Dictionary of item data
 --- @return string: Serialised data to be stored
 local function serialise_item(item_data)
-   if not mod_exist(item_data.mod) then
-      append_mod(item_data.mod)
+   if not mods_core.mod_exists(item_data.mod) then
+      mods_core.add_mod(item_data.mod)
    end
-   local mod_id = get_mod_id(item_data.mod)
+   local mod_id = mods_core.get_id(item_data.mod)
    mod_id = db_misc.num_to_uint8(mod_id)
    local item_name = item_data.name.."\x00"
    local item_num = item_data.count
@@ -86,7 +51,7 @@ end
 local function deserialise_item(raw_data)
    local len = raw_data:len()
    local mod_id = raw_data:byte(1)
-   local mod_name = get_mod_name(mod_id)
+   local mod_name = mods_core.get_name(mod_id)
    local item_name = raw_data:sub(2, len - 4)
    local item_count = raw_data:sub(len - 2, len)
    item_count = db_misc.uint24_to_num(item_count)
@@ -143,9 +108,11 @@ end
 --- @param item_name string: Name of the item
 --- @return boolean: If found in database or not
 function database.item_exist(mod_name, item_name)
-   if not mod_exist(mod_name) then return false end
+   if not mods_core.mod_exists(mod_name) then
+      return false
+   end
    local items = db_misc.read_database(items_path)
-   local mod_id = get_mod_id(mod_name)
+   local mod_id = mods_core.get_id(mod_name)
    mod_id = db_misc.num_to_uint8(mod_id)
    local search = mod_id..item_name.."\x00"
    local _, result = items:find(search, 1, true)
@@ -162,7 +129,7 @@ function database.find_item_id(mod_name, item_name)
    exists=database.item_exist(mod_name, item_name)
    if not exists then return nil end
    local items = db_misc.read_database(items_path)
-   local mod_id = get_mod_id(mod_name)
+   local mod_id = mods_core.get_id(mod_name)
    local mod_id = db_misc.num_to_uint8(mod_id)
    local target = mod_id..item_name.."\x00"
    local cur_name = ""
