@@ -16,7 +16,8 @@
     - ID starts from 1
     - Name is assumed to only contain alphabetical
       characters
-    - The database has a null byte at the start
+    - The database has a null byte at the start for
+      convenience
 ]]--
 
 local db_misc = require "/storage/db_misc"
@@ -48,8 +49,7 @@ function mods_core.add_mod(mod_name)
    local mods = db_misc.read_database(mods_path)
    local mod_id = next_free_id(mods)
    mod_id = db_misc.num_to_uint16(mod_id)
-   local serialised_data = mod_id..mod_name.."\x00"
-   mods = mods..serialised_data
+   mods = mods..mod_id..mod_name.."\x00"
    db_misc.write_database(mods_path, mods)
 end
 
