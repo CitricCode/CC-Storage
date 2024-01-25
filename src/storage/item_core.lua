@@ -7,7 +7,7 @@
    Format:
    Byte 1-2:   item_id (uint16)
    Byte 3-5:   item_count (uint24)
-   Byte 6-7:   mod_id (uint16)
+   Byte 6-7:   item_mod (uint16)
    Byte 8-n:   item_name (\x00 string \x00)
    
    Example:
@@ -21,6 +21,8 @@
       characters
     - The database has a null byte at the start for
       convenience
+    - mod_id combined with item name is always
+      unique
 ]]--
 
 local db_misc = require "/storage/db_misc"
@@ -66,10 +68,10 @@ end
 
 --- Serialises item data to be stored in database
 --- @param item_data table: Dictionary of item data
---- @return string: Serialised data to be stored
+--- @return string|nil: Return nil if error
 local function serialise_item(item_data)
    local items = db_misc.read_database(items_path)
-   local item_id = item_core.get_id(item_data.name)
+   local item_id = item_data.id
    if not item_id then
       item_id = next_free_id(items)
    end
@@ -107,23 +109,23 @@ end
 --- @param item_data table: Dictionary of item data
 --- @return nil|string: Returns error if failed
 function item_core.add_item(item_data)
-   if item_core.item_exists(item_data.name) then
+   if item_core.item_exists(item_data) then
       return "Item already exists"
    end
+   local raw_data = serialise_item(item_data)
    local items = db_misc.read_database(items_path)
-   local item_id = next_free_id(items)
-   local item_count = item_data.count
-   item_count = db_misc.num_to_uint24(item_count)
-   local item_mod = mods_core.get_id(item_data.mod)
-   item_mod = db_misc.num_to_uint16(item_mod)
-   local item_name = "\x00"..item_data.name.."\x00"
-   local raw_data = items..item_id..item_count
-   items = items..raw_data..item_mod..item_name
+   items = items..raw_data
    db_misc.write_database(items_path, items)
 end
 
+--- Removes an item from the database
+--- @todo deny deleting item if it has dependencies
+--- @param item_id number: uint16 id of the item
+--- @return nil|string: return if error
 function item_core.del_item()
-   
+   if not item_core.item_exists() then
+      
+   end
 end
 
 function item_core.upd_item()
@@ -131,15 +133,39 @@ function item_core.upd_item()
 end
 
 
-function item_core.item_exists()
+--- Checks is a given item name with mod is in the
+--- database already
+--- @param item_name string: Name of the item
+--- @param item_mod string: Name of the mod
+--- @return boolean: Whether it exists or not
+function item_core.name_exists(item_name, item_mod)
+   local items = db_misc.read_database(items_path)
+   item_mod = db_misc.num_to_uint16(item_mod)
+   item_mod = escape_magic_chars(item_mod)
+   local search = "\x00....."..item_mod.."\x00"
+   search = search..item_name.."\x00"
+   if items:find(search) then return true end
+   return false
+end
+
+--- Checks if a given item id is in the database
+--- already
+--- @param item_id number: uint16 id of the item
+--- @return boolean: whether it was found or not
+function item_core.id_exists(item_id)
+   local items = db_misc.read_database(items_path)
+   item_id = db_misc.num_to_uint16(item_id)
+   item_id = escape_magic_chars(item_id)
+   local search = "\x00"..item_id..".....\x00"
+   if items:find(search) then return true end
+   return false
+end
+
+function item_core.data_by_name()
 
 end
 
-function item_core.get_data()
-
-end
-
-function item_core.get_id()
+function item_core.data_by_id()
 
 end
 

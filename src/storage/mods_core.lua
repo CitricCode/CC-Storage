@@ -75,7 +75,7 @@ end
 --- @return boolean: Whether the mod was found
 function mods_core.mod_exists(mod_name)
    local mods = db_misc.read_database(mods_path)
-   local search = ".."..mod_name.."\x00"
+   local search = "\x00.."..mod_name.."\x00"
    if mods:find(search) then return true end
    return false
 end
