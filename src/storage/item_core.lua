@@ -96,7 +96,7 @@ local function deserialise_item(raw_data)
    local item_id = raw_data:sub(1, 2)
    local item_count = raw_data:sub(3, 5)
    local item_mod = raw_data:sub(6, 7)
-   local item_name = raw_data:sub(8, -2)
+   local item_name = raw_data:sub(9, -2)
    return {
       ["id"] = db_misc.uint16_to_num(item_id),
       ["num"] = db_misc.uint24_to_num(item_count),
@@ -122,7 +122,7 @@ end
 --- @todo deny deleting item if it has dependencies
 --- @param item_id number: uint16 id of the item
 --- @return nil|string: return if error
-function item_core.del_item()
+function item_core.del_item(item_id)
    if not item_core.item_exists() then
       
    end
@@ -161,12 +161,36 @@ function item_core.id_exists(item_id)
    return false
 end
 
-function item_core.data_by_name()
-
+--- Returns item_data given the item name and mod
+--- @param item_name string: Name of the item
+--- @param item_mod string: Name of the mod
+--- @return table|nil: Return nothing if err
+function item_core.data_by_name(item_name,item_mod)
+   local items = db_misc.read_database(items_path)
+   item_mod = mods_core.get_id(item_mod)
+   item_mod = db_misc.num_to_uint16(item_mod)
+   item_mod = escape_magic_chars(item_mod)
+   local search = "\x00....."..item_mod.."\x00"
+   search = search..item_name.."\x00"
+   local srt, fin = items:find(search)
+   if not (srt or fin) then return nil end
+   local raw_data = items:gsub(srt + 1, fin)
+   return deserialise_item(raw_data)
 end
 
-function item_core.data_by_id()
-
+--- Returns item_data given the item's ID
+--- @param item_id number: uint16 ID of the item
+--- @return table|nil: Return nothing if err
+function item_core.data_by_id(item_id)
+   local items = db_misc.read_database(items_path)
+   item_id = db_misc.num_to_uint16(item_id)
+   item_id = escape_magic_chars(item_id)
+   local search = "\x00"..item_id..".....\x00"
+   local srt, fin = items:find(search)
+   if not (srt or fin) then return nil end
+   _, fin = items:search("\x00", fin + 1)
+   local raw_data = items:gsub(srt + 1, fin)
+   return deserialise_item(raw_data)
 end
 
 
