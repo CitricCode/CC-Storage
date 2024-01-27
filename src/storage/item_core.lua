@@ -105,6 +105,7 @@ local function deserialise_item(raw_data)
    }
 end
 
+
 --- Add an item to the end of the database
 --- @param item_data table: Dictionary of item data
 --- @return nil|string: Returns error if failed
@@ -123,30 +124,35 @@ end
 --- @param item_id number: uint16 id of the item
 --- @return nil|string: return if error
 function item_core.del_item(item_id)
-   if not item_core.item_exists() then
-      
+   if not item_core.id_exists(item_id) then
+      return "Item does not exist"
    end
-end
-
-function item_core.upd_item()
-
-end
-
-
---- Checks is a given item name with mod is in the
---- database already
---- @param item_name string: Name of the item
---- @param item_mod string: Name of the mod
---- @return boolean: Whether it exists or not
-function item_core.name_exists(item_name, item_mod)
    local items = db_misc.read_database(items_path)
-   item_mod = db_misc.num_to_uint16(item_mod)
-   item_mod = escape_magic_chars(item_mod)
-   local search = "\x00....."..item_mod.."\x00"
-   search = search..item_name.."\x00"
-   if items:find(search) then return true end
-   return false
+   item_id = db_misc.num_to_uint16(item_id)
+   item_id = escape_magic_chars(item_id)
+   local search = "\x00"..item_id..".....\x00"
+   local srt, fin = items:find(search)
+   _, fin = items:find("\x00", fin + 1)
+   items = items:sub(1, srt + 1)..items:sub(fin)
+   db_misc.write_database(items_path, items)
 end
+
+--- Updates item_count of a given item_id
+function item_core.upd_item(item_id, item_count)
+   if not item_core.id_exists(item_id) then
+      return "Item does not exist"
+   end
+   local items = db_misc.read_database(items_path)
+   item_id = db_misc.num_to_uint16(item_id)
+   item_id = escape_magic_chars(item_id)
+   local search = "\x00"..item_id..".....\x00"
+   local srt, fin = items:find(search)
+   local srt_slice = items:sub(1, srt + 4)
+   local fin_slice = items:sub(fin)
+   items = srt_slice..item_count..fin_slice
+   db_misc.write_database(items_path, items)
+end
+
 
 --- Checks if a given item id is in the database
 --- already
@@ -188,109 +194,10 @@ function item_core.data_by_id(item_id)
    local search = "\x00"..item_id..".....\x00"
    local srt, fin = items:find(search)
    if not (srt or fin) then return nil end
-   _, fin = items:search("\x00", fin + 1)
+   _, fin = items:find("\x00", fin + 1)
    local raw_data = items:gsub(srt + 1, fin)
    return deserialise_item(raw_data)
 end
 
-
--- --- Add an item to the end of the database
--- --- @param item_data table: Dictionary of item data
--- --- @return nil|string: Returns error if failed
--- function database.append_item(item_data)
---    local mod_name = item_data.mod
---    local item_name = item_data.name
---    if database.item_exist(mod_name, item_name) then
---       return "Item already exists"
---    end
---    local serialised_data=serialise_item(item_data)
---    local database_file = fs.open(items_path, "ab")
---    database_file.write(serialised_data)
---    database_file.close()
--- end
-
--- --- Modifies count stored in database because the
--- --- other values should not be modified
--- --- @param item_id number: ID of the item to update
--- --- @param item_count number: New count in storage
--- --- @return nil|string: return string if failed
--- function database.update_item(item_id, item_count)
---    local err
---    item_count,err=db_misc.num_to_uint24(item_count)
---    if err then return err end
---    local items = db_misc.read_database(items_path)
-
---    local fin, index = 0, 0
---    while index ~= item_id do
---       _, fin = items:find("\x00", fin + 4)
---       if not fin then
---          return "Could not be found"
---       end
---       index = index + 1
---    end
---    local start_slice = items:sub(1, fin)
---    local end_slice = items:sub(fin + 4)
---    items = start_slice..item_count..end_slice
---    db_misc.write_database(items_path, items)
--- end
-
--- --- Ditermines whether item exists in database
--- --- @param mod_name string: Name of the item's mod
--- --- @param item_name string: Name of the item
--- --- @return boolean: If found in database or not
--- function database.item_exist(mod_name, item_name)
---    if not mods_core.mod_exists(mod_name) then
---       return false
---    end
---    local items = db_misc.read_database(items_path)
---    local mod_id = mods_core.get_id(mod_name)
---    mod_id = db_misc.num_to_uint8(mod_id)
---    local search = mod_id..item_name.."\x00"
---    local _, result = items:find(search, 1, true)
---    if result then return true end
---    return false
--- end
-
--- --- Finds item_id of item given its mod and name
--- --- @param mod_name string: Name of the items mod
--- --- @param item_name string: Name of the item
--- --- @return number|nil: returns nil if not found
--- function database.find_item_id(mod_name, item_name)
---    local exists
---    exists=database.item_exist(mod_name, item_name)
---    if not exists then return nil end
---    local items = db_misc.read_database(items_path)
---    local mod_id = mods_core.get_id(mod_name)
---    local mod_id = db_misc.num_to_uint8(mod_id)
---    local target = mod_id..item_name.."\x00"
---    local cur_name = ""
---    local srt, fin, index = 0, -4, 0
---    while cur_name ~= target do
---       srt = fin + 4
---       _, fin = items:find("\x00", fin + 4)
---       if not fin then return nil end
---       cur_name = items:sub(srt, fin)
---       index = index + 1
---    end
---    return index
--- end
-
--- --- Returns item data given it's id
--- --- @param item_id number: Id of the item to get
--- --- @return table|nil: Dictionary storing item data
--- function database.get_item_data(item_id)
---    local items = db_misc.read_database(items_path)
---    local srt, fin, index = 0, -4, 0
---    while item_id ~= index do
---       srt = fin + 4
---       _, fin = items:find("\x00", fin + 4)
---       if not fin then return nil end
---       index = index + 1
---    end
---    fin = fin + 3
---    local raw_data = items:sub(srt, fin)
---    local item_data = deserialise_item(raw_data)
---    return item_data
--- end
 
 return item_core
