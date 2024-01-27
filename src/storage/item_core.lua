@@ -53,6 +53,8 @@ local function escape_magic_chars(search)
    return search
 end
 
+--- @todo issue with the function not finding the
+--- next available id. Skips \x01\x00
 --- Finds the next available id for a new item
 --- @return number: Available id
 local function next_free_id(items)
@@ -110,7 +112,12 @@ end
 --- @param item_data table: Dictionary of item data
 --- @return nil|string: Returns error if failed
 function item_core.add_item(item_data)
-   if item_core.item_exists(item_data) then
+   local item_nam = item_data.name
+   local item_mod = item_data.mod
+   if not mods_core.get_id(item_mod) then
+      mods_core.add_mod(item_mod)
+   end
+   if item_core.name_exists(item_nam,item_mod) then
       return "Item already exists"
    end
    local raw_data = serialise_item(item_data)
@@ -119,6 +126,7 @@ function item_core.add_item(item_data)
    db_misc.write_database(items_path, items)
 end
 
+--- @todo leaves residual 2 null bytes
 --- Removes an item from the database
 --- @todo deny deleting item if it has dependencies
 --- @param item_id number: uint16 id of the item
@@ -137,7 +145,13 @@ function item_core.del_item(item_id)
    db_misc.write_database(items_path, items)
 end
 
+--- @todo does not encode item_count to uint24
+---       Expected: 01 01  00 00 40  00 13  00
+---       Result:   01 01  00 01 36  34     00
 --- Updates item_count of a given item_id
+--- @param item_id number: uint16 id of item
+--- @param item_count number: uint24 total count
+--- @return string|nil: return if err
 function item_core.upd_item(item_id, item_count)
    if not item_core.id_exists(item_id) then
       return "Item does not exist"
@@ -154,6 +168,28 @@ function item_core.upd_item(item_id, item_count)
 end
 
 
+--- @todo Returns error when inputting non existant
+---       mod (db_misc.lua:47 attempt to compare
+---            nil with number)
+--- Checks is a given item name with mod is in the
+--- database already
+--- @param item_name string: Name of the item
+--- @param item_mod string: Name of the mod
+--- @return boolean: Whether it exists or not
+function item_core.name_exists(item_name, item_mod)
+   local items = db_misc.read_database(items_path)
+   item_mod = mods_core.get_id(item_mod)
+   print(item_mod)
+   item_mod = db_misc.num_to_uint16(item_mod)
+   item_mod = escape_magic_chars(item_mod)
+   local search = "\x00....."..item_mod.."\x00"
+   search = search..item_name.."\x00"
+   if items:find(search) then return true end
+   return false
+end
+
+--- @todo claims id 01 00 is true while 01 01 is
+---       false when opposite is true
 --- Checks if a given item id is in the database
 --- already
 --- @param item_id number: uint16 id of the item
@@ -167,6 +203,10 @@ function item_core.id_exists(item_id)
    return false
 end
 
+--- @todo Majorly broken: ID is set to 0, num is
+---       65537, mod is 32256, and name is the
+---       entire database. Occurs on atleast three
+---       different items with exact same values
 --- Returns item_data given the item name and mod
 --- @param item_name string: Name of the item
 --- @param item_mod string: Name of the mod
@@ -184,6 +224,7 @@ function item_core.data_by_name(item_name,item_mod)
    return deserialise_item(raw_data)
 end
 
+--- @todo Exact same issues as data_by_name
 --- Returns item_data given the item's ID
 --- @param item_id number: uint16 ID of the item
 --- @return table|nil: Return nothing if err
