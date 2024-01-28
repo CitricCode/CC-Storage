@@ -23,6 +23,9 @@
       convenience
     - mod_id combined with item name is always
       unique
+    - The item name must not be less than 6 chars
+      long. If so, the name will be padded with
+      spaces to the right
 ]]--
 
 local db_misc = require "/storage/db_misc"
@@ -53,8 +56,6 @@ local function escape_magic_chars(search)
    return search
 end
 
---- @todo issue with the function not finding the
---- next available id. Skips \x01\x00
 --- Finds the next available id for a new item
 --- @return number: Available id
 local function next_free_id(items)
@@ -62,8 +63,8 @@ local function next_free_id(items)
    while srt and search do
       index = index + 1
       search = db_misc.num_to_uint16(index)
-      search = escape_magic_chars(search)
-      srt, _ = items:find("\x00"..search..".-\x00")
+      search = escape_magic_chars(search).."....."
+      srt, _ = items:find("\x00"..search.."\x00")
    end
    return index
 end
@@ -86,7 +87,12 @@ local function serialise_item(item_data)
       item_mod = mods_core.get_id(item_data.mod)
    end
    item_mod = db_misc.num_to_uint16(item_mod)
-   local item_name = "\x00"..item_data.name.."\x00"
+   local item_name = item_data.name
+   if item_name:len() < 6 then
+      local pad = (" "):rep(6 - item_name:len())
+      item_name = item_name..pad
+   end
+   item_name = "\x00"..item_name.."\x00"
    local raw_data = item_id..item_count..item_mod
    return raw_data..item_name
 end
@@ -99,6 +105,7 @@ local function deserialise_item(raw_data)
    local item_count = raw_data:sub(3, 5)
    local item_mod = raw_data:sub(6, 7)
    local item_name = raw_data:sub(9, -2)
+   item_name = item_name:gsub(" ", "")
    return {
       ["id"] = db_misc.uint16_to_num(item_id),
       ["num"] = db_misc.uint24_to_num(item_count),
@@ -126,7 +133,6 @@ function item_core.add_item(item_data)
    db_misc.write_database(items_path, items)
 end
 
---- @todo leaves residual 2 null bytes
 --- Removes an item from the database
 --- @todo deny deleting item if it has dependencies
 --- @param item_id number: uint16 id of the item
@@ -141,13 +147,10 @@ function item_core.del_item(item_id)
    local search = "\x00"..item_id..".....\x00"
    local srt, fin = items:find(search)
    _, fin = items:find("\x00", fin + 1)
-   items = items:sub(1, srt + 1)..items:sub(fin)
+   items = items:sub(1, srt)..items:sub(fin + 1)
    db_misc.write_database(items_path, items)
 end
 
---- @todo does not encode item_count to uint24
----       Expected: 01 01  00 00 40  00 13  00
----       Result:   01 01  00 01 36  34     00
 --- Updates item_count of a given item_id
 --- @param item_id number: uint16 id of item
 --- @param item_count number: uint24 total count
@@ -159,39 +162,37 @@ function item_core.upd_item(item_id, item_count)
    local items = db_misc.read_database(items_path)
    item_id = db_misc.num_to_uint16(item_id)
    item_id = escape_magic_chars(item_id)
+   item_count = db_misc.num_to_uint24(item_count)
    local search = "\x00"..item_id..".....\x00"
    local srt, fin = items:find(search)
-   local srt_slice = items:sub(1, srt + 4)
-   local fin_slice = items:sub(fin)
+   local srt_slice = items:sub(1, srt + 2)
+   local fin_slice = items:sub(fin - 2)
    items = srt_slice..item_count..fin_slice
    db_misc.write_database(items_path, items)
 end
 
 
---- @todo Returns error when inputting non existant
----       mod (db_misc.lua:47 attempt to compare
----            nil with number)
 --- Checks is a given item name with mod is in the
 --- database already
 --- @param item_name string: Name of the item
 --- @param item_mod string: Name of the mod
 --- @return boolean: Whether it exists or not
 function item_core.name_exists(item_name, item_mod)
-   local items = db_misc.read_database(items_path)
    item_mod = mods_core.get_id(item_mod)
-   print(item_mod)
+   if not item_mod then return false end
    item_mod = db_misc.num_to_uint16(item_mod)
    item_mod = escape_magic_chars(item_mod)
+   if item_name:len() < 6 then
+      local pad = (" "):rep(6 - item_name:len())
+      item_name = item_name..pad
+   end
+   local items = db_misc.read_database(items_path)
    local search = "\x00....."..item_mod.."\x00"
    search = search..item_name.."\x00"
    if items:find(search) then return true end
    return false
 end
 
---- @todo claims id 01 00 is true while 01 01 is
----       false when opposite is true
---- Checks if a given item id is in the database
---- already
 --- @param item_id number: uint16 id of the item
 --- @return boolean: whether it was found or not
 function item_core.id_exists(item_id)
@@ -199,14 +200,12 @@ function item_core.id_exists(item_id)
    item_id = db_misc.num_to_uint16(item_id)
    item_id = escape_magic_chars(item_id)
    local search = "\x00"..item_id..".....\x00"
+   print(items:find(search))
    if items:find(search) then return true end
    return false
 end
 
---- @todo Majorly broken: ID is set to 0, num is
----       65537, mod is 32256, and name is the
----       entire database. Occurs on atleast three
----       different items with exact same values
+
 --- Returns item_data given the item name and mod
 --- @param item_name string: Name of the item
 --- @param item_mod string: Name of the mod
@@ -214,17 +213,21 @@ end
 function item_core.data_by_name(item_name,item_mod)
    local items = db_misc.read_database(items_path)
    item_mod = mods_core.get_id(item_mod)
+   if not item_mod then return nil end
    item_mod = db_misc.num_to_uint16(item_mod)
    item_mod = escape_magic_chars(item_mod)
+   if item_name:len() < 6 then
+      local pad = (" "):rep(6 - item_name:len())
+      item_name = item_name..pad
+   end
    local search = "\x00....."..item_mod.."\x00"
    search = search..item_name.."\x00"
    local srt, fin = items:find(search)
    if not (srt or fin) then return nil end
-   local raw_data = items:gsub(srt + 1, fin)
+   local raw_data = items:sub(srt + 1, fin)
    return deserialise_item(raw_data)
 end
 
---- @todo Exact same issues as data_by_name
 --- Returns item_data given the item's ID
 --- @param item_id number: uint16 ID of the item
 --- @return table|nil: Return nothing if err
@@ -236,7 +239,7 @@ function item_core.data_by_id(item_id)
    local srt, fin = items:find(search)
    if not (srt or fin) then return nil end
    _, fin = items:find("\x00", fin + 1)
-   local raw_data = items:gsub(srt + 1, fin)
+   local raw_data = items:sub(srt + 1, fin)
    return deserialise_item(raw_data)
 end
 
