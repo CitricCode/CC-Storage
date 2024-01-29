@@ -2,6 +2,7 @@
 --- @license 
 --- @todo DELETE EVERYTHING, THIS IS THE OLD CODE
 
+local misc = require "/storage/misc"
 local item_core = require "/storage/item_core"
 
 -- ==================== Setting ==================== --
@@ -34,32 +35,6 @@ local banned_peripherals = {
 
 local queued_jobs = {}
 
-
--- ==================== General ==================== --
-
---- Appends line to log file with stack info and time
---- @param msg string: message to add to the log file
-local function log(msg)
-   local epoch = os.epoch("utc")
-   local time
-   time = os.date("%d/%m/%y %H:%M:%S.", epoch / 1000)
-   time = time..tostring(epoch % 1000)
-   local file = fs.open(log_file_path, "a")
-   file.write(time.." - "..msg.."\n")
-   file.close()
-end
-
---- Splits the input string similarly to python
---- @param str string: String to split
---- @param sep string: Seperator to split string
---- @return table substrings: table of the substrings
-local function split(str, sep)
-   local substrings = {}
-   for i in string.gmatch(str, "([^"..sep.."]+)") do
-      table.insert(substrings, i)
-   end
-   return substrings
-end
 
 -- =================== Databases =================== --
 --                      General                      --
@@ -100,7 +75,6 @@ end
 --- @return nil|string error: if chest already exists
 local function add_chest(chest_name, contents)
    if chest_db[chest_name] then
-      log("Add chest failed, already exists")
       return "Add chest failed, already exists"
    end
    if chest_name == io_chest then return end
@@ -114,7 +88,6 @@ end
 --- @return nil|string error: if doesn't exist
 local function upd_chest(chest_name, contents)
    if not chest_db[chest_name] then
-      log("Upd chest failed, doesn't exist")
       return "Upd chest failed, doesn't exist"
    end
    if chest_name == io_chest then return end
@@ -128,20 +101,20 @@ end
 local function sync_chest(counts, raw_contents)
    local contents = {}
    for slot, item in pairs(raw_contents) do
-      local item_mod = split(item.name, ":")[1]
-      local item_name = split(item.name, ":")[2]
+      local item_mod = misc.split(item.name, ":")[1]
+      local item_name = misc.split(item.name, ":")[2]
 
-      if not item_core.item_exist(item_mod, item_name) then
+      if not item_core.name_exists(item_name, item_mod) then
          local item_data = {
             ["mod"] = item_mod,
             ["name"] = item_name,
-            ["count"] = item.count
+            ["num"] = item.count
          }
          print("adding "..item_mod..":"..item_name)
-         item_core.append_item(item_data)
+         item_core.add_item(item_data)
       end
 
-      local item_id = item_core.find_item_id(item_mod, item_name)
+      local item_id = item_core.data_by_name(item_name, item_mod).id
       contents[slot] = {item_id, item.count}
 
       if not counts[item_id] then
@@ -176,12 +149,12 @@ local function sync_storage()
    end
 
    local result, index = "", 1
-   while result ~= "Could not be found" do
+   while result ~= "Item does not exist" do
       local count = counts[index]
       if not count then
-         result = item_core.update_item(index, 0)
+         result = item_core.upd_item(index, 0)
       else
-         result = item_core.update_item(index, count)
+         result = item_core.upd_item(index, count)
       end
       index = index + 1
    end
@@ -200,7 +173,7 @@ local function chest_search(contents, filters)
    for slot, item in pairs(contents) do
       local is_result = true
       local item_id = item[1]
-      local item_data = item_core.get_item_data(item_id)
+      local item_data = item_core.data_by_id(item_id)
 
       if filters["filter_name"] and item_data["name"] ~= filters["filter_name"] then
          is_result = false
@@ -268,8 +241,8 @@ local function req_item(item_id, filters, count)
          if count == 0 then return 0, nil end
          local num_pulled = 0
          num_pulled = io_pull(chest_name, slot, count)
-         local item_count = item_core.get_item_data(item_id)["count"]
-         item_core.update_item(item_id, item_count - num_pulled)
+         local item_count = item_core.data_by_id(item_id).num
+         item_core.upd_item(item_id, item_count - num_pulled)
          local slot_count = chest_db[chest_name][slot][2]
          slot_count = slot_count - num_pulled
          if slot_count == 0 then
@@ -291,16 +264,16 @@ local function put_item()
    local success = true
 
    for slot, item_data in pairs(io_handle.list()) do
-      local split = split(item_data.name, ":")
+      local split = misc.split(item_data.name, ":")
       local item_mod = split[1]
       local item_name = split[2]
-      if not item_core.item_exist(item_mod, item_name) then
+      if not item_core.name_exists(item_name, item_mod) then
          local item_data = {
             ["mod"] = item_mod,
             ["name"] = item_name,
-            ["count"] = item_data.count
+            ["num"] = item_data.count
          }
-         item_core.append_item(item_data)
+         item_core.add_item(item_data)
       end
 
       local item_count = item_data.count
@@ -319,7 +292,7 @@ local function tally_results(item_results)
    local totals = {}
    for _, contents in pairs(item_results) do
       for _, item in pairs(contents) do
-         local item_name = item_core.get_item_data(item[1])["name"]
+         local item_name = item_core.data_by_id(item[1]).name
          local item_total = totals[item_name]
          if not item_total then
             item_total = item[2]
@@ -370,11 +343,12 @@ local function display_storage()
    end
 end
 
---- @todo not entering a number causes error
+--- @todo not entering a number causes error when -r
+--- @todo storage -d: nothing shows when inputting "automobility" for mod
 local function main()
    import_dbs()
    if args[1] == "-r" then
-      local split = split(args[2], ":")
+      local split = misc.split(args[2], ":")
       local item_mod = split[1]
       local item_name = split[2]
       if not (item_mod or item_name) then
@@ -384,7 +358,7 @@ local function main()
          print("Not a number")
          return
       end
-      local item_id = item_core.find_item_id(item_mod, item_name)
+      local item_id = item_core.data_by_name(item_name, item_mod).id
       if not item_id then
          print("Item not found")
          return
