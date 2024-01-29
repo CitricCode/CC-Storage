@@ -79,7 +79,7 @@ local function serialise_item(item_data)
       item_id = next_free_id(items)
    end
    item_id = db_misc.num_to_uint16(item_id)
-   local item_count = item_data.count
+   local item_count = item_data.num
    item_count = db_misc.num_to_uint24(item_count)
    local item_mod = mods_core.get_id(item_data.mod)
    if not item_mod then
@@ -193,6 +193,7 @@ function item_core.name_exists(item_name, item_mod)
    return false
 end
 
+--- Ditermines whether a given id is taken or not
 --- @param item_id number: uint16 id of the item
 --- @return boolean: whether it was found or not
 function item_core.id_exists(item_id)
@@ -200,7 +201,6 @@ function item_core.id_exists(item_id)
    item_id = db_misc.num_to_uint16(item_id)
    item_id = escape_magic_chars(item_id)
    local search = "\x00"..item_id..".....\x00"
-   print(items:find(search))
    if items:find(search) then return true end
    return false
 end
