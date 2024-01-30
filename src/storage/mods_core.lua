@@ -4,12 +4,13 @@
    database used to store mod names.
    
    Format:
-   Byte 1-2:   mod_id   (uint16)
-   Byte 2-n:   mod_name (null terminated string)
+   Byte 1-2:   mod_id    (uint16)
+   Byte 3:     null byte (\x00)
+   Byte 4-n:   mod_name  (Null terminated string)
    
    Example:
-   00 01  6D 69 6E 65 63 72 61 66 74 00
-   [ID ]  [           name            ]
+   00 01  00 6D 69 6E 65 63 72 61 66 74 00
+   [ID ]  [             name             ]
    
    Notes:
     - ID must be unique
@@ -33,13 +34,14 @@ local function next_free_id(mods)
    local srt, search, index = 0, " ", 0
    while srt and search do
       index = index + 1
-      search = "\x00"..db_misc.num_to_uint16(index)
-      srt, _ = mods:find(search, 1, false)
+      search = db_misc.num_to_uint16(index)
+      search = db_misc.escape_chars(search)
+      srt, _ = mods:find("\x00"..search.."\x00")
    end
    return index
 end
 
---- Adds mod to the database, assumes mod not exist
+--- Adds a mod to the database
 --- @param mod_name string: Name of the mod to add
 --- @return nil|string: Return string if failed
 function mods_core.add_mod(mod_name)
@@ -49,7 +51,7 @@ function mods_core.add_mod(mod_name)
    local mods = db_misc.read_database(mods_path)
    local mod_id = next_free_id(mods)
    mod_id = db_misc.num_to_uint16(mod_id)
-   mods = mods..mod_id..mod_name.."\x00"
+   mods = mods..mod_id.."\x00"..mod_name.."\x00"
    db_misc.write_database(mods_path, mods)
 end
 
@@ -62,10 +64,11 @@ end
 function mods_core.del_mod(mod_id)
    local mods = db_misc.read_database(mods_path)
    mod_id = db_misc.num_to_uint16(mod_id)
-   local search = "\x00"..mod_id
-   local srt, _ = mods:find(search, 1, true)
+   mod_id = db_misc.escape_chars(mod_id)
+   local search = "\x00"..mod_id.."\x00"
+   local srt, _ = mods:find(search)
    if not srt then return "Mod not found" end
-   local fin, _ = mods:find("\x00", srt + 3)
+   local fin, _ = mods:find("\x00", srt + 4)
    mods = mods:sub(1, srt)..mods:sub(fin + 1)
    db_misc.write_database(mods_path, mods)
 end
@@ -75,7 +78,7 @@ end
 --- @return boolean: Whether the mod was found
 function mods_core.mod_exists(mod_name)
    local mods = db_misc.read_database(mods_path)
-   local search = "\x00.."..mod_name.."\x00"
+   local search = "\x00"..mod_name.."\x00"
    if mods:find(search) then return true end
    return false
 end
@@ -86,10 +89,11 @@ end
 function mods_core.get_name(mod_id)
    local mods = db_misc.read_database(mods_path)
    mod_id = db_misc.num_to_uint16(mod_id)
-   local search = "\x00"..mod_id
-   local _, srt = mods:find(search, 1, true)
+   mod_id = db_misc.escape_chars(mod_id)
+   local search = "\x00"..mod_id.."\x00"
+   local _, srt = mods:find(search)
+   if not srt then return nil end
    local fin, _ = mods:find("\x00", srt)
-   if not (srt or fin) then return nil end
    local mod_name = mods:sub(srt + 1, fin - 1)
    return mod_name
 end
@@ -99,10 +103,10 @@ end
 --- @return number|nil: return nil if failed
 function mods_core.get_id(mod_name)
    local mods = db_misc.read_database(mods_path)
-   local search = ".."..mod_name.."\x00"
+   local search = "\x00"..mod_name.."\x00"
    local srt, _ = mods:find(search)
    if not srt then return nil end
-   local mod_id = mods:sub(srt, srt + 1)
+   local mod_id = mods:sub(srt - 2, srt - 1)
    mod_id = db_misc.uint16_to_num(mod_id)
    return mod_id
 end

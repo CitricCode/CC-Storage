@@ -96,6 +96,26 @@ function db_misc.uint8_to_num(bytes)
 end
 
 
+--- Adds escape chars to lua's magic characters
+--- for example given ")." the result is "%)%."
+--- @param string string: String to escape chars
+--- @return string: Escaped string
+function db_misc.escape_chars(string)
+   string = string:gsub("%(", "%%%(")
+   string = string:gsub("%%", "%%%%")
+   string = string:gsub("%)", "%%%)")
+   string = string:gsub("%.", "%%%.")
+   string = string:gsub("%+", "%%%+")
+   string = string:gsub("%-", "%%%-")
+   string = string:gsub("%*", "%%%*")
+   string = string:gsub("%?", "%%%?")
+   string = string:gsub("%[", "%%%[")
+   string = string:gsub("%]", "%%%]")
+   string = string:gsub("%^", "%%%^")
+   string = string:gsub("%$", "%%%$")
+   return string
+end
+
 --- Reads entire database file and returns data
 --- @param path string: Path to database
 --- @return string: Database contents

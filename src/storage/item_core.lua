@@ -5,10 +5,11 @@
    in the storage system
    
    Format:
-   Byte 1-2:   item_id (uint16)
+   Byte 1-2:   item_id    (uint16)
    Byte 3-5:   item_count (uint24)
-   Byte 6-7:   item_mod (uint16)
-   Byte 8-n:   item_name (\x00 string \x00)
+   Byte 6-7:   item_mod   (uint16)
+   Byte 8:     null byte  (\x00)
+   Byte 9-n:   item_name  (Null terminated string)
    
    Example:
    00 01  00 01  00 01 23  00 73 74 6F 6E 65 00
@@ -36,26 +37,6 @@ local item_core = {}
 local items_path = db_misc.db_path.."items.db"
 
 
---- Adds escape chars to lua's magic characters
---- for example given ")." the result is "%)%."
---- @param search string: String to escape chars
---- @return string: Escaped string
-local function escape_magic_chars(search)
-   search = search:gsub("%%", "%%%%")
-   search = search:gsub("%(", "%%%(")
-   search = search:gsub("%)", "%%%)")
-   search = search:gsub("%.", "%%%.")
-   search = search:gsub("%+", "%%%+")
-   search = search:gsub("%-", "%%%-")
-   search = search:gsub("%*", "%%%*")
-   search = search:gsub("%?", "%%%?")
-   search = search:gsub("%[", "%%%[")
-   search = search:gsub("%]", "%%%]")
-   search = search:gsub("%^", "%%%^")
-   search = search:gsub("%$", "%%%$")
-   return search
-end
-
 --- Finds the next available id for a new item
 --- @return number: Available id
 local function next_free_id(items)
@@ -63,7 +44,7 @@ local function next_free_id(items)
    while srt and search do
       index = index + 1
       search = db_misc.num_to_uint16(index)
-      search = escape_magic_chars(search).."....."
+      search=db_misc.escape_chars(search).."....."
       srt, _ = items:find("\x00"..search.."\x00")
    end
    return index
@@ -75,17 +56,10 @@ end
 local function serialise_item(item_data)
    local items = db_misc.read_database(items_path)
    local item_id = item_data.id
-   if not item_id then
-      item_id = next_free_id(items)
-   end
    item_id = db_misc.num_to_uint16(item_id)
    local item_count = item_data.num
    item_count = db_misc.num_to_uint24(item_count)
    local item_mod = mods_core.get_id(item_data.mod)
-   if not item_mod then
-      mods_core.add_mod(item_data.mod)
-      item_mod = mods_core.get_id(item_data.mod)
-   end
    item_mod = db_misc.num_to_uint16(item_mod)
    local item_name = item_data.name
    if item_name:len() < 6 then
@@ -121,14 +95,17 @@ end
 function item_core.add_item(item_data)
    local item_nam = item_data.name
    local item_mod = item_data.mod
-   if not mods_core.get_id(item_mod) then
-      mods_core.add_mod(item_mod)
-   end
    if item_core.name_exists(item_nam,item_mod) then
       return "Item already exists"
    end
-   local raw_data = serialise_item(item_data)
+   if not mods_core.get_id(item_mod) then
+      mods_core.add_mod(item_mod)
+   end
    local items = db_misc.read_database(items_path)
+   if not item_data.id then
+      item_data.id = next_free_id(items)
+   end
+   local raw_data = serialise_item(item_data)
    items = items..raw_data
    db_misc.write_database(items_path, items)
 end
@@ -143,7 +120,7 @@ function item_core.del_item(item_id)
    end
    local items = db_misc.read_database(items_path)
    item_id = db_misc.num_to_uint16(item_id)
-   item_id = escape_magic_chars(item_id)
+   item_id = db_misc.escape_chars(item_id)
    local search = "\x00"..item_id..".....\x00"
    local srt, fin = items:find(search)
    _, fin = items:find("\x00", fin + 1)
@@ -161,7 +138,7 @@ function item_core.upd_item(item_id, item_count)
    end
    local items = db_misc.read_database(items_path)
    item_id = db_misc.num_to_uint16(item_id)
-   item_id = escape_magic_chars(item_id)
+   item_id = db_misc.escape_chars(item_id)
    item_count = db_misc.num_to_uint24(item_count)
    local search = "\x00"..item_id..".....\x00"
    local srt, fin = items:find(search)
@@ -181,7 +158,7 @@ function item_core.name_exists(item_name, item_mod)
    item_mod = mods_core.get_id(item_mod)
    if not item_mod then return false end
    item_mod = db_misc.num_to_uint16(item_mod)
-   item_mod = escape_magic_chars(item_mod)
+   item_mod = db_misc.escape_chars(item_mod)
    if item_name:len() < 6 then
       local pad = (" "):rep(6 - item_name:len())
       item_name = item_name..pad
@@ -199,7 +176,7 @@ end
 function item_core.id_exists(item_id)
    local items = db_misc.read_database(items_path)
    item_id = db_misc.num_to_uint16(item_id)
-   item_id = escape_magic_chars(item_id)
+   item_id = db_misc.escape_chars(item_id)
    local search = "\x00"..item_id..".....\x00"
    if items:find(search) then return true end
    return false
@@ -215,7 +192,7 @@ function item_core.data_by_name(item_name,item_mod)
    item_mod = mods_core.get_id(item_mod)
    if not item_mod then return nil end
    item_mod = db_misc.num_to_uint16(item_mod)
-   item_mod = escape_magic_chars(item_mod)
+   item_mod = db_misc.escape_chars(item_mod)
    if item_name:len() < 6 then
       local pad = (" "):rep(6 - item_name:len())
       item_name = item_name..pad
@@ -234,7 +211,7 @@ end
 function item_core.data_by_id(item_id)
    local items = db_misc.read_database(items_path)
    item_id = db_misc.num_to_uint16(item_id)
-   item_id = escape_magic_chars(item_id)
+   item_id = db_misc.escape_chars(item_id)
    local search = "\x00"..item_id..".....\x00"
    local srt, fin = items:find(search)
    if not (srt or fin) then return nil end
