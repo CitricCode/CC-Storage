@@ -66,7 +66,18 @@ function db_misc.pack_str(str)
 end
 
 function db_misc.unpack_str(pkd_str)
-   
+   local chnk, str = 0, ""
+   for i=1, #pkd_str, 2 do
+      chnk = bit32.lshift(pkd_str:byte(i), 8)
+      chnk = chnk + pkd_str:byte(i+1)
+      for j=2, 0, -1 do
+         local char
+         char=bit32.band(bit32.rshift(chnk,j*5),31)
+         if char == 0 then break end
+         str = str..string.char(char + 94)
+      end
+   end
+   return str
 end
 
 --- Adds escape chars to lua's magic characters
