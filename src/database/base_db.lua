@@ -37,7 +37,7 @@ end
 --- @return string raw_data: Serialised data
 --- @abstract
 --- @diagnostic disable-next-line: missing-return
-function base_db:_serialise() end
+function base_db:_serialise(data) end
 
 --- Deserialises data to be used in the program
 --- @param raw_data string: Serialised data
@@ -62,6 +62,14 @@ function base_db:write_db()
    file.close()
 end
 
+--- Creates an iterator that iterates through the
+--- database
+--- @protected
+--- @return function: Iterator
+--- @abstract
+--- @diagnostic disable-next-line: missing-return
+function base_db:_iterate() end
+
 --- Returns the start index and end index for where
 --- the given data is stored in the database
 --- @protected
@@ -74,25 +82,27 @@ function base_db:_get_pos(data) end
 --- Finds the next available ID
 --- @protected
 function base_db:_next_id()
-   local idx = 0
-   while self:_get_pos({id=idx}) do idx = idx+1 end
+   local idx = 1
+   while pcall(self._get_pos,self,{id=idx}) do idx = idx+1 end
+   return idx
 end
 
 --- Add the data to the end of the database
 --- @param data table: Dictionary of data to append
 function base_db:add(data)
-   if self:_get_pos() then
+   if self:_get_pos(data) then
       local data = textutils.serialise(data)
       error(data.."\n"..debug.traceback())
    end
-   self:_next_id()
-   self.db = self.db..self:_serialise()
+   data.id = self:_next_id()
+   
+   self.db = self.db..self:_serialise(data)
 end
 
 --- Removes data from the database
 --- @param data table: Dictionary of data to delete
 function base_db:del(data)
-   local srt, fin = self:_get_pos()
+   local srt, fin = self:_get_pos(data)
    if not srt then
       local data = textutils.serialise(data)
       error(data.."\n"..debug.traceback())
@@ -104,7 +114,7 @@ end
 --- @param data table: Dictionary of data to find
 --- @return table: Filled dictionary of found data
 function base_db:get_data(data)
-   local srt, fin = self:_get_pos()
+   local srt, fin = self:_get_pos(data)
    if not srt then
       local data = textutils.serialise(data)
       error(data.."\n"..debug.traceback())

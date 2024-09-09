@@ -10,20 +10,19 @@
    Format:
    Byte 1:     name_id    (uint8)   PK
    Byte 2-3:   mod_id     (uint16)  FK
-   Byte 4:     null byte  (\0)
-   Byte 5-n:   chest_name (Null terminated string)
+   Byte 4-n:   chest_name (packed string)
    
    Example:
-   01  02  00 73 74 6F 6E 65 5F 63 68 65 73 74 00
-   id  id  [             chest_name             ]
+   01  02  56 D1 40 E1 15 47 D6 C0
+   id  id  [     chest_name      ]
    
    Notes:
     - IDs must be unique
     - IDs starts from 1
-    - Name is assumed to only contain alphabetical
-      characters and "_"
-    - The database has a null byte at the start for
-      convenience
+    - Name is assumed to only contain lowercase
+      letters and underscores
+
+   !!! REWORK THIS BECAUSE THE FORMAT IS NOT CONSISTANT !!!
 ]]--
 
 local db_misc = require "database.db_misc"
@@ -48,7 +47,7 @@ function chests_db:_deserialise(raw_dat)
    return {
       ["id"] = db_misc.to_num(raw_dat:sub(1, 1)),
       ["m_id"] = db_misc.to_num(raw_dat:sub(2,3)),
-      ["name"] = raw_dat:sub(4, -1)
+      ["name"] = db_misc.unpack_str(raw_dat:sub(4))
    }
 end
 

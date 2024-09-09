@@ -30,7 +30,7 @@
     - The item name must not be less than 6 chars
       long. If so, the name will be padded with
       spaces to the right
-]]--
+]]--test = require "database.db_misc"
 --- @module "types"
 
 --- @class item_data
@@ -54,11 +54,8 @@ function item_db:_serialise(data)
    local id = db_misc.to_str(2, data.id)
    local num = db_misc.to_str(3, data.num)
    local m_id = db_misc.to_str(2, data.m_id)
-   local name = data.name
-   if name:len() < 6 then
-      local pad = (" "):rep(6 - name:len())
-      name = name..pad
-   end
+   local name = db_misc.pack_str(data.name)
+   if #name<6 then name=name..(" "):rep(6-#name) end
    return id..num..m_id.."\0"..name.."\0"
 end
 
@@ -72,6 +69,15 @@ function item_db:_deserialise(raw_data)
       m_id = db_misc.to_num(raw_data:sub(6, 7)),
       name = raw_data:sub(9, -2):gsub(" ", "")
    }
+end
+
+function item_db:_iterate()
+   local srt, fin = 0, 0
+   return function ()
+      srt, fin = fin + 1, fin + 8
+      while self.db:byte(fin)<128 do fin=fin+1 end
+      return srt, fin
+   end
 end
 
 --- Returns the start index and end index for where
