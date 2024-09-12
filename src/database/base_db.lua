@@ -16,112 +16,122 @@
 --- class is not ment to be used, but extended for
 --- each specific database.
 --- @class base_db
---- @field public db_path string: DB file location
---- @field protected db string: Database data
+--- @field protected _db_path string: DB file loc
+--- @field protected _db_data string: DB stored dat
 local base_db = {
-   db_path = "",
-   db = "",
+   _db_path = "",
+   _db_data = ""
 }
 
---- Initialises the class
-function base_db:init()
-   local class = {}
-   setmetatable(class, self)
+
+--- Initialises the base class; This should only
+--- be run from inherited classes
+--- @param path string: Path to the database file
+--- @return base_db: Returned instance of the class
+function base_db:init(path)
+   local o = {}
+   setmetatable(o, self)
    self.__index = self
+   self._db_path = path
    self:_read_db()
-   return class
+   return o
 end
 
---- Serialises data to be stored in the database
+
 --- @protected
---- @return string raw_data: Serialised data
---- @abstract
---- @diagnostic disable-next-line: missing-return
+--- Reads the entire database file and assigns it
+--- into the `_db_data` field. Only called when
+--- initialising the class. Will create the
+--- database if the file does not exist.
+function base_db:_read_db()
+   if not fs.exists(self._db_path) then
+      -- !!! Add logger log here for creating database file !!! --
+      local file = fs.open(self._db_path, "w")
+      file.write("CC-SS")
+      file.close()
+   end
+   local file = fs.open(self._db_path, "rb")
+   self._db_data = file.readAll()
+   file.close()
+end
+
+--- Writes `_db_data` to the file to commit to disk
+function base_db:write_db()
+   local file = fs.open(self._db_path, "wb")
+   file.write(self._db_data)
+   file.close()
+end
+
+
+--- @protected
+--- @abstract  
+--- Serialises the data to be written to the db
+--- @param data table: Data to serialise
+--- @return string|nil raw_data: Raw dat if success
 function base_db:_serialise(data) end
 
---- Deserialises data to be used in the program
---- @param raw_data string: Serialised data
---- @return table data: Deserialised data in table
---- @abstract
---- @diagnostic disable-next-line: missing-return
+--- @protected
+--- @abstract  
+--- Deserialises the data to be used in the program
+--- @param raw_data string: Data to deserialise
+--- @return table|nil: Table of data if success
 function base_db:_deserialise(raw_data) end
 
 
---- Reads the db and assigns its data to db
 --- @protected
-function base_db:_read_db()
-   local file = fs.open(self.db_path, "rb")
-   self.db = file.readAll()
-   file.close()
-end
-
---- Commits the db data and writes to the file
-function base_db:write_db()
-   local file = fs.open(self.db_path, "wb")
-   file.write(self.db)
-   file.close()
-end
-
---- Creates an iterator that iterates through the
---- database
---- @protected
---- @return function: Iterator
---- @abstract
---- @diagnostic disable-next-line: missing-return
+--- @abstract  
+--- Returns an iterator that iterates through the
+--- database and returns the start and end indicies
+--- for the current iteration
+--- @return function: Iterator function
 function base_db:_iterate() end
 
---- Returns the start index and end index for where
---- the given data is stored in the database
 --- @protected
---- @return number|nil,number|nil: Nil if failed
---- @abstract
---- @diagnostic disable-next-line: missing-return
+--- @abstract  
+--- Returns the start and end index for where the
+--- given data is stored in the database. If 0, 0
+--- is returned, then it was not found.
+--- @param data table: Data to find in the database
+--- @return number|nil: Start index or nil if err
+--- @return number|nil: End index or nil if err
 function base_db:_get_pos(data) end
 
-
---- Finds the next available ID
---- @protected
-function base_db:_next_id()
-   local idx = 1
-   while pcall(self._get_pos,self,{id=idx}) do idx = idx+1 end
-   return idx
-end
-
---- Add the data to the end of the database
---- @param data table: Dictionary of data to append
-function base_db:add(data)
-   if self:_get_pos(data) then
-      local data = textutils.serialise(data)
-      error(data.."\n"..debug.traceback())
-   end
-   data.id = self:_next_id()
-   
-   self.db = self.db..self:_serialise(data)
-end
-
---- Removes data from the database
---- @param data table: Dictionary of data to delete
-function base_db:del(data)
-   local srt, fin = self:_get_pos(data)
-   if not srt then
-      local data = textutils.serialise(data)
-      error(data.."\n"..debug.traceback())
-   end
-   self.db = self.db:sub(1,srt)..self.db:sub(fin+1)
-end
-
---- Finds the data from the database and returns it
---- @param data table: Dictionary of data to find
---- @return table: Filled dictionary of found data
 function base_db:get_data(data)
    local srt, fin = self:_get_pos(data)
-   if not srt then
-      local data = textutils.serialise(data)
-      error(data.."\n"..debug.traceback())
+   -- !!! Add logger log here for failure to find data !!! --
+   if not srt then return nil end
+   local raw_data = self._db_data:sub(srt, fin)
+   return self:_deserialise(raw_data)
+end
+
+--- @protected
+--- Finds the next available unique ID in the db
+--- @return integer|nil: Unique ID if success
+function base_db:_next_id()
+   local id = 1
+   while true do
+      local ret, _ = self:_get_pos({id=id})
+      if ret == 0 then return id end
+      -- !!! Add logger log here for no more available IDS/Incorrect parsing !!! --
+      if ret == nil then return nil end
    end
-   local raw_dat = self.db:sub(srt + 1, fin)
-   return self:_deserialise(raw_dat)
 end
 
 
-return base_db
+--- Serialises and appends `data` to the database
+--- @param data table: Data to append to the db
+--- @return number|nil: 1 if success, nil if fail
+function base_db:add(data)
+   -- !!! Add logger log here for no more available IDS/Incorrect parsing !!! --
+   if self:_get_pos(data) then return nil end
+   data.id = self:_next_id()
+   if not data.id then return nil end
+   local raw_data = self:_serialise(data)
+   self._db_data=self._db_data..raw_data
+   return 1
+end
+
+
+function base_db:del(data)
+   local srt, fin = self:
+end
