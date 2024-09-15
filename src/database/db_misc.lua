@@ -6,7 +6,6 @@
    This module houses common functions used in
    other database modules
 ]]--
---- @module "types"
 
 local db_misc = {}
 
@@ -14,7 +13,7 @@ local db_misc = {}
 --- Converts lua number to string to a given length
 --- into a byte array in little endian order.
 --- @param len number: Count of bytes to convert to
---- @param int uint: Number to convert
+--- @param int number: Number to convert
 --- @return string|nil: Returns nil if failed
 function db_misc.to_str(len, int)
    if len < 0 or len % 1 ~= 0 then return nil end
@@ -33,7 +32,7 @@ end
 --- Converts byte array into a number. Assumes
 --- the byte array is in little endian order.
 --- @param str string: Byte array to convert
---- @return uint: Converted number
+--- @return number: Converted number
 function db_misc.to_num(str)
    local num = 0
    for i = 0, #str-1 do
@@ -92,7 +91,6 @@ function db_misc.unpack_str(pkd_str)
    end
    return str
 end
-
 
 --- Adds escape chars to lua's magic characters
 --- for example given ")." the result is "%)%."

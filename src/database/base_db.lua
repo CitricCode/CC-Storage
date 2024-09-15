@@ -2,37 +2,29 @@
 --    A storage system for CC:T and CC:R mods    --
 --         Copyright (C) 2024 CitricCode         --
 
---[[
-   This module is a generic interface for custom
-   binary databases used to store information about
-   the storage system. This class is not ment to be
-   used, but extended for each specific database.
-   Any functions that are empty are required
-   functions to be implimented by inherited classes
-]]--
-
-
---- Generic class for a database interface. This
---- class is not ment to be used, but extended for
---- each specific database.
+--- This module is a generic interface for custom
+--- binary databases used to store information
+--- about the storage system. This class is not
+--- ment to be used, but extended for each specific
+--- database. Any functions that have @abstract are
+--- required functions to be implimented by
+--- inherited classes.
 --- @class base_db
 --- @field protected _db_path string: DB file loc
 --- @field protected _db_data string: DB stored dat
-local base_db = {
-   _db_path = "",
-   _db_data = ""
-}
+local base_db = {}
+base_db.__index = base_db
 
 
 --- Initialises the base class; This should only
 --- be run from inherited classes
 --- @param path string: Path to the database file
 --- @return base_db: Returned instance of the class
-function base_db:init(path)
-   local o = {}
+function base_db:init(o, path)
+   o = o or {}
    setmetatable(o, self)
-   self.__index = self
    self._db_path = path
+   self._db_data = ""
    self:_read_db()
    return o
 end
@@ -96,6 +88,9 @@ function base_db:_iterate() end
 --- @return number|nil: End index or nil if err
 function base_db:_get_pos(data) end
 
+--- Fills in missing data from the databases
+--- @param data table: Data to find in the database
+--- @return table|nil: Table full of complete data
 function base_db:get_data(data)
    local srt, fin = self:_get_pos(data)
    -- !!! Add logger log here for failure to find data !!! --
@@ -114,13 +109,16 @@ function base_db:_next_id()
       if ret == 0 then return id end
       -- !!! Add logger log here for no more available IDS/Incorrect parsing !!! --
       if ret == nil then return nil end
+      id = id + 1
    end
 end
 
 
---- Serialises and appends `data` to the database
+--- Serialises and appends `data` to the database.
+--- `data` must be complete and not already exist
+--- in order to add to the database.
 --- @param data table: Data to append to the db
---- @return number|nil: 1 if success, nil if fail
+--- @return number|nil: 1 if success, nil if error
 function base_db:add(data)
    -- !!! Add logger log here for no more available IDS/Incorrect parsing !!! --
    if self:_get_pos(data) then return nil end
@@ -131,7 +129,16 @@ function base_db:add(data)
    return 1
 end
 
-
+--- Removes the given data from the databases
+--- @param data table: Data to remove from the db
+--- @return number|nil: 1 if success, nil if fail
 function base_db:del(data)
-   local srt, fin = self:
+   local srt, fin = self:_get_pos(data)
+   -- !!! Add logger log here for delete failed due to not existing in db !!! --
+   if not srt then return nil end
+   self.db = self.db:sub(1,srt)..self.db:sub(fin+1)
+   return 1
 end
+
+
+return base_db
